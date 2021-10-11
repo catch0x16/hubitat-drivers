@@ -15,6 +15,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Small edit by Marc O. Chouinard <mochouinard@gmail.com> 2020-12-11 : Fix setting the heating temperature so it work reliably.  Tested on a split unit with heat pump.
+ *
  */
 
 metadata
@@ -122,6 +125,14 @@ metadata
       type         : "bool"                ,
       title        : "Enable Info Logging" ,
       defaultValue : true
+    )
+
+    input (
+      name         : "temperatureUnitValue" ,
+      type         : "enum"            ,
+      options      : TEMPERATURE_UNIT_VALUES     ,
+      title        : "Temperature unit" ,
+      defaultValue : "F"
     )
 
     input (
@@ -373,6 +384,12 @@ private Map     getREPORT_TIME_VALUES()
   "8 hours" : 0x08
 ]}
 
+private List    getTEMPERATURE_UNIT_VALUES()
+{[
+  "F" ,
+  temperatureUnit()
+]}
+
 private Integer[] getALL_PARAMS()
 {[
   REMOTE_CODE_PARAM ,
@@ -416,6 +433,11 @@ private Map getTHERMOSTAT_FAN_MODE_MAP()
   medium    : hubitat.zwave.commands.thermostatfanmodev3.ThermostatFanModeReport.FAN_MODE_MEDIUM      ,
   high      : hubitat.zwave.commands.thermostatfanmodev3.ThermostatFanModeReport.FAN_MODE_HIGH
 ]}
+
+private String temperatureUnit ( ) {
+  debugLog( "Temperature Unit : ${ temperatureUnitValue }" )
+  temperatureUnitValue
+}
 
 private void debugLog ( message )
 {
@@ -522,7 +544,7 @@ private Map zwaveCommand ( hubitat.zwave.commands.sensormultilevelv1.SensorMulti
 
   data = [
     name  : "temperature" ,
-    unit  : "C"           ,
+    unit  : temperatureUnit()           ,
     value : command.scaledSensorValue
   ]
 
@@ -591,7 +613,7 @@ private Map zwaveCommand ( hubitat.zwave.commands.thermostatsetpointv1.Thermosta
 
   Map data = [
     value : command.scaledValue ,
-    unit  : "C"
+    unit  : temperatureUnit()
   ]
 
   switch ( SETPOINT_TYPE_MAP.find{ it.value == command.setpointType }?.key )
@@ -853,14 +875,14 @@ List setCoolingSetpoint ( BigDecimal value )
     case "auto" :
       infoLog( "Setting coolingSetpoint ${ value }" )
       state.lastCoolingSetpoint = value
-      sendEvent( name : "coolingSetpoint" , value : value , unit : "C" )
+      sendEvent( name : "coolingSetpoint" , value : value , unit : temperatureUnit() )
       pauseExecution( 500 )
       setThermostatMode( device.currentState( "thermostatMode" ).value )
       break
 
     default :
-      sendEvent( name : "coolingSetpoint" , value : value , unit : "C" )
-      state.lastHeatingSetpoint = value
+      sendEvent( name : "coolingSetpoint" , value : value , unit : temperatureUnit() )
+      state.lastCoolingSetpoint = value
       debugLog( "Not setting coolingSetpoint (mode is ${ device.currentState( "thermostatMode" )?.value })" )
       break
   }
@@ -872,15 +894,15 @@ List setHeatingSetpoint ()
   setHeatingSetpoint( new BigDecimal( device.currentState( "heatingSetpoint" )?.value ) )
 }
 
-List setheatingSetpoint ( BigDecimal value )
+List setHeatingSetpoint ( BigDecimal value )
 {
   if ( value.remainder( (BigDecimal) setpointStepSize ) != 0 )
   {
-    if ( value < state.lastheatingSetpoint )
-      value = state.lastheatingSetpoint - setpointStepSize
+    if ( value < state.lastHeatingSetpoint )
+      value = state.lastHeatingSetpoint - setpointStepSize
 
-    else if ( value > state.lastheatingSetpoint )
-      value = state.lastheatingSetpoint + setpointStepSize
+    else if ( value > state.lastHeatingSetpoint )
+      value = state.lastHeatingSetpoint + setpointStepSize
   }
 
   value = Math.max( (BigDecimal) heatingSetpointMin , value )
@@ -891,14 +913,14 @@ List setheatingSetpoint ( BigDecimal value )
     case "heat" :
     case "auto" :
       infoLog( "Setting heatingSetpoint ${ value }" )
-      state.lastheatingSetpoint = value
-      sendEvent( name : "heatingSetpoint" , value : value , unit : "C" )
+      state.lastHeatingSetpoint = value
+      sendEvent( name : "heatingSetpoint" , value : value , unit : temperatureUnit() )
       pauseExecution( 500 )
       setThermostatMode( device.currentState( "thermostatMode" ).value )
       break
 
     default :
-      sendEvent( name : "heatingSetpoint" , value : value , unit : "C" )
+      sendEvent( name : "heatingSetpoint" , value : value , unit : temperatureUnit() )
       state.lastHeatingSetpoint = value
       debugLog( "Not setting heatingSetpoint (mode is ${ device.currentState( "thermostatMode" )?.value })" )
       break
